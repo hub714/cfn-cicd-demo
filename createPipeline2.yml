@@ -1,0 +1,302 @@
+Description: Pipeline creation template for cfn-cid-demo. This will just create a pipeline + codebuild cfn-nag env.
+    
+Mappings:
+
+    # You can find the latest available ECS Optimized AMI on this page of our documentation:
+    # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
+    # (note the AMI identifier is region specific) 
+
+    AWSRegionToAMI:
+        us-east-2:
+            AMI: ami-6e56780b
+        us-east-1:
+            AMI: ami-6944c513
+        us-west-2:
+            AMI: ami-f5fc2c8d
+        us-west-1:
+            AMI: ami-bbe6dfdb
+        eu-west-2:
+            AMI: ami-e36b7487
+        eu-west-1:
+            AMI: ami-faa10a83
+        eu-central-1:
+            AMI: ami-1f9f1f70
+        ap-northeast-2:
+            AMI: ami-88f85fe6
+        ap-northeast-1:
+            AMI: ami-cb3a8cad
+        ap-southeast-2:
+            AMI: ami-a9a14acb
+        ap-southeast-1:
+            AMI: ami-ca3762a9
+        ca-central-1:
+            AMI: ami-cace75ae
+
+Parameters:
+
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names. Restriction - Lower case with minimal special characters. 
+        Type: String
+        MinLength: 2
+        AllowedPattern: (?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*
+
+    InstanceType: 
+        Description: Choose an instance type for ECS Cluster Instances - default is t2.micro
+        Type: String
+        Default: t2.micro
+        AllowedValues:
+            - t2.micro
+            - t2.small
+            - t2.medium
+            - t2.large
+            - c4.large
+            - m4.large
+    GitHubOAuthToken:
+        Description: GitHub OAuth Token
+        Type: String
+        NoEcho: True
+        MinLength: 1
+    GitHubUserName:
+        Description: GitHub Username of repo you want CodePipeline to monitor
+        Type: String
+        MinLength: 1
+        Default: hub714
+    GitHubRepoName:
+        Description: GitHub Repo you want CodePipeline to monitor
+        Type: String
+        MinLength: 1
+        Default: cfn-cicd-demo
+    GitHubBranch:
+        Description: GitHub Repo Branch you want CodePipeline to monitor
+        Type: String
+        MinLength: 1
+        Default: master
+
+Resources:
+    CloudWatchLogsGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: !Sub ${AWS::StackName}-LogGroup
+        RetentionInDays: 1
+      
+    ArtifactBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      
+    CFNNagCodeBuildProject:
+      Type: AWS::CodeBuild::Project
+      Properties:
+        Artifacts:
+          Type: "CODEPIPELINE"
+        Source:
+          Type: "CODEPIPELINE"
+          BuildSpec: "cfn-nag-buildspec.yml"
+        Environment:
+          ComputeType: "BUILD_GENERAL1_SMALL"
+          Image: "aws/codebuild/ruby:2.3.1"
+          Type: "LINUX_CONTAINER"
+        Name: !Sub ${EnvironmentName}-CFNNagCodeBuild-project
+        ServiceRole: !Ref CodeBuildServiceRole
+        
+    GenericCodeBuildProject:
+      Type: AWS::CodeBuild::Project
+      Properties:
+        Artifacts:
+          Type: "CODEPIPELINE"
+        Source:
+          Type: "CODEPIPELINE"
+          BuildSpec: "accesskeys-buildspec.yml"
+        Environment:
+          ComputeType: "BUILD_GENERAL1_SMALL"
+          Image: "aws/codebuild/ubuntu-base:14.04"
+          Type: "LINUX_CONTAINER"
+        Name: !Sub ${EnvironmentName}-GeneralCodeBuild-project
+        ServiceRole: !Ref CodeBuildServiceRole
+    
+    CodeBuildServiceRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${EnvironmentName}-CodeBuildServiceRole
+        Path: /
+        AssumeRolePolicyDocument: |
+          {
+              "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": { "Service": [ "codebuild.amazonaws.com" ]},
+                  "Action": [ "sts:AssumeRole" ]
+              }]
+          }
+        Policies:
+          - PolicyName: root
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Resource: "*"
+                  Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                    - ecr:GetAuthorizationToken
+                - Resource: !Sub arn:aws:s3:::${ArtifactBucket}/*
+                  Effect: Allow
+                  Action:
+                    - s3:GetObject
+                    - s3:PutObject
+                    - s3:GetObjectVersion
+                - Resource: 
+                    - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${CloudWatchLogsGroup}/codebuild/tests/
+                    - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${CloudWatchLogsGroup}/codebuild/tests:*
+                  Effect: Allow
+                  Action: 
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvent
+                - Resource:
+                    - !Sub arn:aws:s3:::codepipeline-${AWS::Region}-*
+                  Effect: Allow
+                  Action: 
+                    - s3:PutObject
+                    - s3:GetObject
+                    - s3:GetObjectVersion
+    
+    CodePipelineServiceRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${EnvironmentName}-CodePipelineServiceRole
+        Path: /
+        AssumeRolePolicyDocument: 
+          Version: "2012-10-17"
+          Statement: 
+            - 
+              Effect: "Allow"
+              Principal: 
+                Service: 
+                  - "codepipeline.amazonaws.com"
+              Action: 
+                - "sts:AssumeRole"
+        Policies:
+          - PolicyName: root
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Resource: "*"
+                  Effect: Allow
+                  Action:
+                    - s3:GetObject
+                    - s3:GetObjectVersion
+                    - s3:GetBucketVersioning
+                - Resource: "arn:aws:s3:::codepipeline*"
+                  Effect: Allow
+                  Action:
+                    - s3:PutObject
+                - Resource: "*"
+                  Effect: Allow
+                  Action:
+                    - codebuild:StartBuild
+                    - codebuild:BatchGetBuilds
+                    - iam:PassRole
+                    - iam:CreateRole
+                    - iam:DetachRolePolicy
+                    - iam:AttachRolePolicy
+                    - iam:DeleteRole
+                    - iam:PassRole
+                    - iam:DeleteRolePolicy
+                    - iam:PutRolePolicy
+                - Resource: "*"
+                  Effect: Allow
+                  Action:
+                    - ec2:*
+                    - elasticloadbalancing:*
+                    - autoscaling:*
+                    - cloudwatch:*
+                    - s3:*
+                    - sns:*
+                    - cloudformation:*
+        
+    CFServiceRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${EnvironmentName}-CFServiceRole
+        Path: /
+        AssumeRolePolicyDocument: 
+          Version: "2012-10-17"
+          Statement: 
+            - 
+              Effect: "Allow"
+              Principal: 
+                Service: 
+                  - "cloudformation.amazonaws.com"
+              Action: 
+                - "sts:AssumeRole"
+        Policies:
+          - PolicyName: root
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Resource: "*"
+                  Effect: Allow
+                  Action:
+                    - iam:PassRole
+                    - iam:CreateRole
+                    - iam:DetachRolePolicy
+                    - iam:AttachRolePolicy
+                    - iam:DeleteRole
+                    - iam:PassRole
+                    - iam:DeleteRolePolicy
+                    - iam:PutRolePolicy
+                    - ecs:RegisterTaskDefinition
+                    - ecs:DeregisterTaskDefinition
+                    - ecs:CreateService
+                    - ecs:UpdateService
+                    - ecs:UpdateService
+                    - ecs:DescribeServices
+                    - ecs:DeleteService
+                    - lambda:*
+                    - s3:GetObject
+                    - cloudformation:CreateStack
+                    - cloudformation:UpdateStack
+                    - cloudformation:SetStackPolicy
+                    - cloudformation:CreateChangeSet
+
+    Pipeline:
+      Type: 'AWS::CodePipeline::Pipeline'
+      Properties:
+        ArtifactStore:
+          Type: S3
+          Location: !Ref ArtifactBucket
+        Name: !Sub ${AWS::StackName}
+        RoleArn: !GetAtt CodePipelineServiceRole.Arn
+        Stages:
+          - Name: 'Source'
+            Actions:
+              - Name: 'Source'
+                ActionTypeId:
+                  Category: 'Source'
+                  Owner: 'ThirdParty'
+                  Version: '1'
+                  Provider: 'GitHub'
+                OutputArtifacts:
+                  - Name: MyApp
+                Configuration:
+                  Owner: !Sub ${GitHubUserName}
+                  Repo: !Ref GitHubRepoName
+                  PollForSourceChanges: 'true'
+                  Branch: !Ref GitHubBranch
+                  OAuthToken: !Ref GitHubOAuthToken
+                RunOrder: 1
+          - Name: 'Build'
+            Actions:
+              - Name: 'CodeBuild'
+                ActionTypeId:
+                  Category: 'Build'
+                  Owner: 'AWS'
+                  Version: '1'
+                  Provider: 'CodeBuild'
+                InputArtifacts:
+                  - Name: MyApp
+                OutputArtifacts:
+                  - Name: MyAppBuilt
+                Configuration:
+                  ProjectName: !Ref CFNNagCodeBuildProject
+                RunOrder: 1
