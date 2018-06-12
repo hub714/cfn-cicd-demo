@@ -141,13 +141,13 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PublicRouteTable
       
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PublicRouteTable
       
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
