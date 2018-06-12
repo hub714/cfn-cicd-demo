@@ -87,6 +87,12 @@ Parameters:
         Type: String
         MinLength: 1
         Default: createVPC.yml
+        
+    SubscriptionEmail:
+        Description: Email for Manual Approval Emails
+        Type: String
+        MinLength: 1
+        Default: hubertc@amazon.com
 
 Resources:
     CloudWatchLogsGroup:
@@ -259,7 +265,13 @@ Resources:
                     - cloudformation:UpdateStack
                     - cloudformation:SetStackPolicy
                     - cloudformation:CreateChangeSet
-
+    ManualApprovalTopic: 
+      Type: AWS::SNS::Topic
+      Properties: 
+        Subscription: 
+          - Endpoint: !Ref SubscriptionEmail
+            Protocol: email
+                     
     Pipeline:
       Type: 'AWS::CodePipeline::Pipeline'
       Properties:
@@ -288,31 +300,54 @@ Resources:
                 RunOrder: 1
           - Name: 'Linting_and_Static_Analysis'
             Actions:
-              - Name: 'CodeBuild'
+              - Name: CodeBuild
                 ActionTypeId:
-                  Category: 'Build'
-                  Owner: 'AWS'
-                  Version: '1'
-                  Provider: 'CodeBuild'
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
                 InputArtifacts:
                   - Name: MyApp
                 Configuration:
                   ProjectName: !Ref CFNNagCodeBuildProject
                 RunOrder: 1
-          - Name: 'Deploy'
+          - Name: Deploy
             Actions:
-              - Name: 'CreateChangeSet'
+              - Name: CreateChangeSet
                 ActionTypeId:
-                  Category: 'Deploy'
-                  Owner: 'AWS'
-                  Version: '1'
-                  Provider: 'CloudFormation'
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
                 InputArtifacts:
                   - Name: MyApp
                 Configuration:
                   ActionMode: CHANGE_SET_REPLACE
-                  ChangeSetName: InfraChangeSet
+                  ChangeSetName: !Sub ${AWS::StackName}-ChangeSet
                   RoleArn: !GetAtt CFServiceRole.Arn
                   StackName: !Ref CFNStackName
                   TemplatePath: !Sub MyApp::${TemplateFileName}
                 RunOrder: 1
+              - Name: ManualGate
+                ActionTypeId:
+                  Category: Approval
+                  Owner: AWS
+                  Version: 1
+                  Provider: Manual
+                Configuration:
+                  NotificationArn: !Ref ManualApprovalTopic
+                RunOrder: 2
+              - Name: ExecuteChangeSet
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                InputArtifacts:
+                  - Name: MyApp
+                Configuration:
+                  ActionMode: CHANGE_SET_EXECUTE
+                  ChangeSetName: !Sub ${AWS::StackName}-ChangeSet
+                  RoleArn: !GetAtt CFServiceRole.Arn
+                  StackName: !Ref CFNStackName
+                RunOrder: 3
