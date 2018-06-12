@@ -51,26 +51,42 @@ Parameters:
             - t2.large
             - c4.large
             - m4.large
+            
     GitHubOAuthToken:
         Description: GitHub OAuth Token
         Type: String
         NoEcho: True
         MinLength: 1
+        
     GitHubUserName:
         Description: GitHub Username of repo you want CodePipeline to monitor
         Type: String
         MinLength: 1
         Default: hub714
+        
     GitHubRepoName:
         Description: GitHub Repo you want CodePipeline to monitor
         Type: String
         MinLength: 1
         Default: cfn-cicd-demo
+        
     GitHubBranch:
         Description: GitHub Repo Branch you want CodePipeline to monitor
         Type: String
         MinLength: 1
         Default: master
+        
+    CFNStackName:
+        Description: Name of the CFN Stack you want to update
+        Type: String
+        MinLength: 1
+        Default: infra-cicd-demo-stack
+        
+    TemplateFileName:
+        Description: Filename of the CFN Template You want to deploy
+        Type: String
+        MinLength: 1
+        Default: createVPC.yml
 
 Resources:
     CloudWatchLogsGroup:
@@ -270,7 +286,7 @@ Resources:
                   Branch: !Ref GitHubBranch
                   OAuthToken: !Ref GitHubOAuthToken
                 RunOrder: 1
-          - Name: 'Build'
+          - Name: 'Linting_and_Static_Analysis'
             Actions:
               - Name: 'CodeBuild'
                 ActionTypeId:
@@ -280,8 +296,23 @@ Resources:
                   Provider: 'CodeBuild'
                 InputArtifacts:
                   - Name: MyApp
-                OutputArtifacts:
-                  - Name: MyAppBuilt
                 Configuration:
                   ProjectName: !Ref CFNNagCodeBuildProject
+                RunOrder: 1
+          - Name: 'Deploy'
+            Actions:
+              - Name: 'CreateChangeSet'
+                ActionTypeId:
+                  Category: 'Deploy'
+                  Owner: 'AWS'
+                  Version: '1'
+                  Provider: 'CloudFormation'
+                InputArtifacts:
+                  - Name: MyApp
+                Configuration:
+                  ActionMode: CHANGE_SET_REPLACE
+                  ChangeSetName: InfraChangeSet
+                  RoleArn: !GetAtt CFServiceRole.Arn
+                  StackName: !Ref CFNStackName
+                  TemplatePath: !Sub MyApp::${TemplateFileName}
                 RunOrder: 1
