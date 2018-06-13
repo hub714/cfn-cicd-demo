@@ -13,7 +13,7 @@ Parameters:
   NetworkStack:
     Description: Network Infrastructure Stack Name to import values from
     Type: String
-    Default: infra-cicd-demo-stack
+    Default: NetworkInfrastructure
   
   HostedZoneName:
     Description: Domain to add subdomain to
