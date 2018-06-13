@@ -30,7 +30,7 @@ Parameters:
         Description: Name of the CFN Stack you want to update
         Type: String
         MinLength: 1
-        Default: infra-cicd-demo-stack
+        Default: NetworkInfrastructure
         
     TemplateFileName:
         Description: Filename of the CFN Template You want to deploy
@@ -43,11 +43,6 @@ Parameters:
         Type: String
         MinLength: 1
         Default: hubertc@amazon.com
-        
-    EnvironmentName:
-        Description: Environment Name
-        Type: String
-        MinLength: 1
 
 Resources:
     CloudWatchLogsGroup:
@@ -78,7 +73,7 @@ Resources:
     CodeBuildServiceRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: !Sub ${EnvironmentName}-CodeBuildServiceRole
+        RoleName: !Sub ${AWS::StackName}-CodeBuildServiceRole
         Path: /
         AssumeRolePolicyDocument: |
           {
@@ -125,7 +120,7 @@ Resources:
     CodePipelineServiceRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: !Sub ${EnvironmentName}-CodePipelineServiceRole
+        RoleName: !Sub ${AWS::StackName}-CodePipelineServiceRole
         Path: /
         AssumeRolePolicyDocument: 
           Version: "2012-10-17"
@@ -179,7 +174,7 @@ Resources:
     CFServiceRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: !Sub ${EnvironmentName}-CFServiceRole
+        RoleName: !Sub ${AWS::StackName}-CFServiceRole
         Path: /
         AssumeRolePolicyDocument: 
           Version: "2012-10-17"

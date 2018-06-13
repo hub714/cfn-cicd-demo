@@ -14,6 +14,16 @@ Parameters:
     Description: Network Infrastructure Stack Name to import values from
     Type: String
     Default: infra-cicd-demo-stack
+  
+  HostedZoneName:
+    Description: Domain to add subdomain to
+    Type: String
+    Default: hubertcheung.com
+    
+  HostedZoneSubDomain:
+    Description: Subdomain to add
+    Type: String
+    Default: go
     
 Mappings:
   AWSInstanceType2Arch:
@@ -117,12 +127,10 @@ Resources:
               httpd: []
           files:
             "/var/www/html/index.html":
-              content:
-                Fn::Join:
-                - "\n"
-                - - <center><img src="http://immersionday.hubertcheung.com/vertafore.png"
-                    alt="Vertafore"/>
-                  - "<h1>Hi Vertafore Bootcamp!</h1></center>"
+              content: !Sub | 
+                <center><img src="http://immersionday.hubertcheung.com/successkid.jpg"
+                  alt="SUCCESS!"/>
+                <h1>OHai!</h1>
               mode: '000644'
               owner: root
               group: root
@@ -161,6 +169,17 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
+        
+  DemoDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${HostedZoneName}.
+      Comment: DNS name for my instance.
+      Name: !Sub ${HostedZoneSubDomain}.${HostedZoneName}.
+      Type: A
+      TTL: '60'
+      ResourceRecords:
+      - !GetAtt WebServerInstance.PublicIp
         
 Outputs:
   InstanceId:
