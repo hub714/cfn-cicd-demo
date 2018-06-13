@@ -13,12 +13,13 @@ Parameters:
   NetworkStack:
     Description: Network Infrastructure Stack Name to import values from
     Type: String
-    Default: netInfra
+    Default: infra-cicd-demo-stack
     
 Mappings:
   AWSInstanceType2Arch:
     t2.micro:
       Arch: HVM64
+      
   AWSRegionArch2AMI:
     us-east-1:
       PV64: ami-2a69aa47
@@ -26,7 +27,7 @@ Mappings:
       HVMG2: ami-0a6e3770
     us-west-2:
       PV64: ami-7f77b31f
-      HVM64: ami-e251209a
+      HVM64: ami-f2d3638a
       HVMG2: ami-ee15a196
     us-west-1:
       PV64: ami-a2490dc2
@@ -92,12 +93,13 @@ Mappings:
       PV64: ami-80707be2
       HVM64: ami-3e60745c
       HVMG2: NOT_SUPPORTED
+
 Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId:
-        Ref: VPC
+        Fn::ImportValue: !Sub ${NetworkStack}-AccountVPC
       GroupDescription: A Security Group
       SecurityGroupIngress:
       - IpProtocol: tcp
@@ -106,7 +108,6 @@ Resources:
         CidrIp: 0.0.0.0/0
   WebServerInstance:
     Type: AWS::EC2::Instance
-    DependsOn: AttachGateway
     Metadata:
       Comment: Install a simple application
       AWS::CloudFormation::Init:
@@ -131,27 +132,32 @@ Resources:
                 enabled: 'true'
                 ensureRunning: 'true'
     Properties:
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref AWS::Region, !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
       InstanceType: !Ref InstanceType
+      KeyName: PDX 2015-07-15
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Demo App
       NetworkInterfaces:
-      - GroupSet: !Ref InstanceSecurityGroup
+      - GroupSet: 
+        - !Ref InstanceSecurityGroup
         AssociatePublicIpAddress: 'true'
         DeviceIndex: '0'
         DeleteOnTermination: 'true'
-        SubnetId: Fn::ImportValue: !Sub ${NetworkStack}-PublicSubnet1
+        SubnetId: 
+          Fn::ImportValue: !Sub '${NetworkStack}-PublicSubnet1'
       UserData:
         Fn::Base64: !Sub | 
           #!/bin/bash -xe
           yum update -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-init -v
-                   --stack ${AWS::StackName}
-                   --resource WebServerInstance 
+          /opt/aws/bin/cfn-init -v \
+                   --stack ${AWS::StackName} \
+                   --resource WebServerInstance \
                    --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e $? 
-                   --stack ${AWS::StackName}
-                   --resource WebServerInstance
-                   --region ${AWS::Region}
-        
+          /opt/aws/bin/cfn-signal -e $? \
+                   --stack ${AWS::StackName} \
+                   --resource WebServerInstance \
+                   --region ${AWS::Region} 
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
