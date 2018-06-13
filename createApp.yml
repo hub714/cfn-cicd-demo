@@ -1,0 +1,174 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a sample EC2 Instance serving a website
+Parameters:
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t2.micro
+    ConstraintDescription: must be a t2.micro
+    
+  NetworkStack:
+    Description: Network Infrastructure Stack Name to import values from
+    Type: String
+    Default: netInfra
+    
+Mappings:
+  AWSInstanceType2Arch:
+    t2.micro:
+      Arch: HVM64
+  AWSRegionArch2AMI:
+    us-east-1:
+      PV64: ami-2a69aa47
+      HVM64: ami-97785bed
+      HVMG2: ami-0a6e3770
+    us-west-2:
+      PV64: ami-7f77b31f
+      HVM64: ami-e251209a
+      HVMG2: ami-ee15a196
+    us-west-1:
+      PV64: ami-a2490dc2
+      HVM64: ami-824c4ee2
+      HVMG2: ami-0da4a46d
+    eu-west-1:
+      PV64: ami-4cdd453f
+      HVM64: ami-d834aba1
+      HVMG2: ami-af8013d6
+    eu-west-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-403e2524
+      HVMG2: NOT_SUPPORTED
+    eu-west-3:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-8ee056f3
+      HVMG2: NOT_SUPPORTED
+    eu-central-1:
+      PV64: ami-6527cf0a
+      HVM64: ami-5652ce39
+      HVMG2: ami-1d58ca72
+    ap-northeast-1:
+      PV64: ami-3e42b65f
+      HVM64: ami-ceafcba8
+      HVMG2: ami-edfd658b
+    ap-northeast-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-863090e8
+      HVMG2: NOT_SUPPORTED
+    ap-northeast-3:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-83444afe
+      HVMG2: NOT_SUPPORTED
+    ap-southeast-1:
+      PV64: ami-df9e4cbc
+      HVM64: ami-68097514
+      HVMG2: ami-c06013bc
+    ap-southeast-2:
+      PV64: ami-63351d00
+      HVM64: ami-942dd1f6
+      HVMG2: ami-85ef12e7
+    ap-south-1:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-531a4c3c
+      HVMG2: ami-411e492e
+    us-east-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-f63b1193
+      HVMG2: NOT_SUPPORTED
+    ca-central-1:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-a954d1cd
+      HVMG2: NOT_SUPPORTED
+    sa-east-1:
+      PV64: ami-1ad34676
+      HVM64: ami-84175ae8
+      HVMG2: NOT_SUPPORTED
+    cn-north-1:
+      PV64: ami-77559f1a
+      HVM64: ami-cb19c4a6
+      HVMG2: NOT_SUPPORTED
+    cn-northwest-1:
+      PV64: ami-80707be2
+      HVM64: ami-3e60745c
+      HVMG2: NOT_SUPPORTED
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VPC
+      GroupDescription: A Security Group
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AttachGateway
+    Metadata:
+      Comment: Install a simple application
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+          files:
+            "/var/www/html/index.html":
+              content:
+                Fn::Join:
+                - "\n"
+                - - <center><img src="http://immersionday.hubertcheung.com/vertafore.png"
+                    alt="Vertafore"/>
+                  - "<h1>Hi Vertafore Bootcamp!</h1></center>"
+              mode: '000644'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+    Properties:
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref AWS::Region, !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+      - GroupSet: !Ref InstanceSecurityGroup
+        AssociatePublicIpAddress: 'true'
+        DeviceIndex: '0'
+        DeleteOnTermination: 'true'
+        SubnetId: Fn::ImportValue: !Sub ${NetworkStack}-PublicSubnet1
+      UserData:
+        Fn::Base64: !Sub | 
+          #!/bin/bash -xe
+          yum update -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v
+                   --stack ${AWS::StackName}
+                   --resource WebServerInstance 
+                   --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? 
+                   --stack ${AWS::StackName}
+                   --resource WebServerInstance
+                   --region ${AWS::Region}
+        
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+        
+Outputs:
+  InstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref WebServerInstance
+    
+  AZ:
+    Description: Availability Zone of the newly created EC2 instance
+    Value: !GetAtt WebServerInstance.AvailabilityZone
+    
+  PublicDNS:
+    Description: Public DNSName of the newly created EC2 instance
+    Value: !GetAtt WebServerInstance.PublicDnsName
+    
+  PublicIP:
+    Description: Public IP address of the newly created EC2 instance
+    Value: !GetAtt WebServerInstance.PublicIp
