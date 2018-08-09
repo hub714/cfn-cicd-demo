@@ -24,6 +24,10 @@ Parameters:
     Description: Subdomain to add
     Type: String
     Default: go
+  
+  KeyName:
+    Description: SSH Key
+    Type: AWS::EC2::KeyPair::KeyName
     
 Mappings:
   AWSInstanceType2Arch:
@@ -142,7 +146,7 @@ Resources:
     Properties:
       ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
       InstanceType: !Ref InstanceType
-      KeyName: PDX 2015-07-15
+      KeyName: !Ref KeyName
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName} Demo App
