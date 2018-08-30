@@ -7,3 +7,15 @@ AWS CloudFormation CICD Demo using AWS CodePipeline and AWS CodeBuild
   - This includes cfn-nag as a step within CodeBuild
 3. ???
 4. CICD!
+
+## Reset
+reset.sh 
+- This will break the environment again. Putting in the wrong subnet associations
+
+fix.sh
+- This will fix the environment and show the app.
+
+## Important tools
+- [CFN-Nag from Stelligent](https://github.com/stelligent/cfn_nag)
+- [CFN Python Linter](https://github.com/awslabs/cfn-python-lint)
+- [AWS CDK](https://github.com/awslabs/aws-cdk)
